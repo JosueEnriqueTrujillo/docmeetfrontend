@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, type RouteLocationRaw } from 'vue-router'
 import { useAuthStore } from '@/store/auth-store'
 import { authController } from '@/controllers/auth.controller'
 
 const props = defineProps<{
   initialMode: 'login' | 'register'
+  redirectTo?: RouteLocationRaw
 }>()
 
 const emit = defineEmits(['close'])
@@ -50,7 +51,7 @@ async function submit(): Promise<void> {
     }
 
     emit('close')
-    await router.push('/')
+    await router.push(props.redirectTo ?? '/')
   } catch (e) {
     errorMessage.value = authController.toErrorMessage(e)
   } finally {

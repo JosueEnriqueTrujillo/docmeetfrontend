@@ -1,9 +1,16 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { storeToRefs } from 'pinia'
+import { useAuthStore } from '@/store/auth-store'
+import AuthModal from '@/components/layout/AuthModal.vue'
 
 const route = useRoute()
 const router = useRouter()
+const auth = useAuthStore()
+const { isAuthenticated } = storeToRefs(auth)
+
+const showAuthModal = ref(false)
 
 const loading = ref(true)
 const doctor = ref<any>(null)
@@ -36,6 +43,19 @@ async function loadDoctor() {
   }
   
   loading.value = false
+}
+
+const appointmentsRoute = computed(() => ({
+  name: 'appointments' as const,
+  query: { doctorId: String(route.params.id) },
+}))
+
+function scheduleAppointment(): void {
+  if (isAuthenticated.value) {
+    void router.push(appointmentsRoute.value)
+    return
+  }
+  showAuthModal.value = true
 }
 
 onMounted(() => {
@@ -75,7 +95,11 @@ onMounted(() => {
               <h1 class="text-2xl sm:text-3xl font-bold text-slate-900">{{ doctor.fullName }}</h1>
               <p class="text-[var(--color-doc-blue-600)] font-semibold text-lg mt-1">{{ doctor.specialty }}</p>
             </div>
-            <button class="w-full sm:w-auto px-6 py-3 bg-[var(--color-doc-blue-600)] hover:bg-[var(--color-doc-blue-700)] text-white rounded-xl font-semibold shadow-md transition-all">
+            <button
+              type="button"
+              class="w-full sm:w-auto px-6 py-3 bg-[var(--color-doc-blue-600)] hover:bg-[var(--color-doc-blue-700)] text-white rounded-xl font-semibold shadow-md transition-all"
+              @click="scheduleAppointment"
+            >
               Agendar Cita
             </button>
           </div>
@@ -153,4 +177,13 @@ onMounted(() => {
       </div>
     </div>
   </div>
+
+  <Teleport to="body">
+    <AuthModal
+      v-if="showAuthModal"
+      initial-mode="login"
+      :redirect-to="appointmentsRoute"
+      @close="showAuthModal = false"
+    />
+  </Teleport>
 </template>
