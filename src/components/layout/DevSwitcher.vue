@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import { useAuthStore } from '@/store/auth-store'
+// 1. Subimos dos niveles (../../) para salir de 'layout' y 'components' e ingresar a 'store'
+import { useAuthStore } from '../../store/auth-store'
+
+// 2. Subimos dos niveles (../../) para ingresar a 'controllers'
+import { authController } from '../../controllers/auth.controller'
 
 const auth = useAuthStore()
 
@@ -10,7 +14,7 @@ function setRole(role: 'admin' | 'doctor' | 'paciente') {
     paciente: 'Juan Pérez'
   }
 
-  // 1. Creamos el usuario de prueba
+  // Creamos el usuario simulado con el rol seleccionado
   const fakeUser = {
     id: Math.floor(Math.random() * 1000).toString(),
     fullName: names[role],
@@ -18,8 +22,11 @@ function setRole(role: 'admin' | 'doctor' | 'paciente') {
     role: role
   }
 
-  // 2. Usamos TU propia función del store para inyectar un token falso y el usuario
-  auth.applySession('dev-fake-token-999', fakeUser as any)
+  // Guardamos las credenciales directamente en el localStorage usando el controlador
+  authController.applyDevSession('dev-fake-token-999', fakeUser as any)
+  
+  // Sincronizamos inmediatamente el estado de Pinia para que cambie la vista actual sin recargar
+  auth.syncAuth()
 }
 
 function logout() {
@@ -30,7 +37,6 @@ const isDev = import.meta.env.DEV
 </script>
 
 <template>
-  <!-- El v-if asegura que esto JAMÁS se muestre en producción -->
   <div 
     v-if="isDev" 
     class="fixed bottom-4 right-4 bg-slate-900/90 backdrop-blur-sm p-3 rounded-2xl flex items-center gap-2 z-[9999] shadow-2xl border border-slate-700 transition-all hover:scale-105"

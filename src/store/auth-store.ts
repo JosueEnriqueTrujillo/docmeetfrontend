@@ -1,110 +1,96 @@
-import type {
-  ILoginCredentials,
-  IRegisterPayload,
-  IUpdateProfilePayload,
-  IUser,
-} from '@/types'
+import { defineStore } from 'pinia'
 
-// Nombres de las llaves en localStorage
-const USERS_DB_KEY = 'docmeet_users_db'
-const TOKEN_KEY = 'docmeet_auth_token'
-const USER_SESSION_KEY = 'docmeet_user_session'
+// 1. Importamos el controlador (Asegúrate de que el archivo exista y se llame exactamente así)
+import { authController } from '../controllers/auth.controller'
 
-// Funciones auxiliares privadas para leer/escribir la "Base de Datos" local
-const getUsersDB = (): any[] => JSON.parse(localStorage.getItem(USERS_DB_KEY) || '[]')
-const saveUsersDB = (users: any[]): void => localStorage.setItem(USERS_DB_KEY, JSON.stringify(users))
+// 2. Importamos los tipos (Asegúrate de tener un archivo index.ts en tu carpeta types)
+import type { ILoginCredentials, IRegisterPayload, IUpdateProfilePayload, IUser } from '../types'
 
-export const authController = {
-  readSession() {
-    const token = localStorage.getItem(TOKEN_KEY)
-    const userStr = localStorage.getItem(USER_SESSION_KEY)
+export const useAuthStore = defineStore('auth', {
+  state: () => {
+    // Leemos la sesión actual de localStorage al inicializar la tienda
+    const session = authController.readSession()
+    
     return {
-      token: token || null,
-      user: userStr ? JSON.parse(userStr) as IUser : null,
+      user: session.user as IUser | null,
+      token: session.token as string | null,
+      isLoading: false,
+      error: null as string | null,
     }
   },
 
-  isAdmin(user: IUser | null | undefined): boolean {
-    // Asumiendo que tu interfaz IUser tiene una propiedad 'role'
-    return user?.role === 'admin'
+  getters: {
+    isAuthenticated: (state): boolean => !!state.token && !!state.user,
+    isAdmin: (state): boolean => authController.isAdmin(state.user),
   },
 
-  applyDevSession(token: string, user: IUser): void {
-    localStorage.setItem(TOKEN_KEY, token)
-    localStorage.setItem(USER_SESSION_KEY, JSON.stringify(user))
-  },
+  actions: {
+    async login(credentials: ILoginCredentials) {
+      this.isLoading = true
+      this.error = null
+      try {
+        const { user, token } = await authController.login(credentials)
+        this.user = user
+        this.token = token
+      } catch (err: any) {
+        this.error = err.message || 'Error al iniciar sesión'
+        throw err
+      } finally {
+        this.isLoading = false
+      }
+    },
 
-  async login(credentials: ILoginCredentials): Promise<{ token: string; user: IUser }> {
-    // Simulamos el tiempo de espera de una petición HTTP
-    await new Promise(resolve => setTimeout(resolve, 800))
-    
-    const users = getUsersDB()
-    // Asumiendo que ILoginCredentials usa email y password
-    const user = users.find(u => u.email === credentials.email && u.password === credentials.password)
+    async register(payload: IRegisterPayload) {
+      this.isLoading = true
+      this.error = null
+      try {
+        const { user, token } = await authController.register(payload)
+        this.user = user
+        this.token = token
+      } catch (err: any) {
+        this.error = err.message || 'Error al registrar usuario'
+        throw err
+      } finally {
+        this.isLoading = false
+      }
+    },
 
-    if (!user) {
-      throw new Error('Credenciales incorrectas o usuario no encontrado.')
+    async updateProfile(payload: IUpdateProfilePayload) {
+      this.isLoading = true
+      this.error = null
+      try {
+        const updatedUser = await authController.updateProfile(payload)
+        this.user = updatedUser
+      } catch (err: any) {
+        this.error = err.message || 'Error al actualizar el perfil'
+        throw err
+      } finally {
+        this.isLoading = false
+      }
+    },
+
+    async fetchProfile() {
+      this.isLoading = true
+      try {
+        const user = await authController.fetchProfile()
+        this.user = user
+      } catch (err: any) {
+        console.error('Error obteniendo el perfil:', err)
+      } finally {
+        this.isLoading = false
+      }
+    },
+
+    logout() {
+      authController.logout()
+      this.user = null
+      this.token = null
+    },
+
+    syncAuth() {
+      const session = authController.syncFromStorage()
+      this.user = session.user
+      this.token = session.token
     }
-
-    // Quitamos la contraseña antes de guardar en la sesión por seguridad
-    const { password, ...safeUser } = user
-    const token = `mock-jwt-token-${Date.now()}` // Simulamos un JWT
-
-    this.applyDevSession(token, safeUser as IUser)
-    return { token, user: safeUser as IUser }
-  },
-
-  async register(payload: IRegisterPayload): Promise<{ token: string; user: IUser }> {
-    await new Promise(resolve => setTimeout(resolve, 800))
-    
-    const users = getUsersDB()
-    if (users.some(u => u.email === payload.email)) {
-      throw new Error('Este correo ya está registrado.')
-    }
-
-    // Creamos el nuevo usuario. (Ajusta los campos según tu IRegisterPayload)
-    const newUser = {
-      id: `usr-${Date.now()}`,
-      ...payload,
-      role: 'patient', // Rol por defecto
-    }
-
-    users.push(newUser)
-    saveUsersDB(users)
-
-    // Autologueamos al usuario recién creado
-    const { password, ...safeUser } = newUser
-    const token = `mock-jwt-token-${Date.now()}`
-
-    this.applyDevSession(token, safeUser as IUser)
-    return { token, user: safeUser as IUser }
-  },
-
-  async updateProfile(payload: IUpdateProfilePayload): Promise<IUser> {
-    await new Promise(resolve => setTimeout(resolve, 500))
-    const { user } = this.readSession()
-    
-    if (!user) throw new Error('No hay sesión activa.')
-
-    const updatedUser = { ...user, ...payload }
-    localStorage.setItem(USER_SESSION_KEY, JSON.stringify(updatedUser))
-    
-    // Opcional: Actualizar también en el USERS_DB_KEY si lo deseas
-
-    return updatedUser as IUser
-  },
-
-  async fetchProfile(): Promise<IUser | null> {
-    const { user } = this.readSession()
-    return user
-  },
-
-  logout(): void {
-    localStorage.removeItem(TOKEN_KEY)
-    localStorage.removeItem(USER_SESSION_KEY)
-  },
-
-  syncFromStorage() {
-    return this.readSession()
-  },
-}
+  }
+})
